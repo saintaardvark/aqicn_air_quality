@@ -8,7 +8,7 @@ import time
 
 import click
 from influxdb import InfluxDBClient
-
+from loguru import logger
 
 # Sault Ste Marie
 # "location": "Allens Sideroad, Sault Ste. Marie, Algoma, Ontario, P6C 5P7, Canada"
@@ -55,6 +55,7 @@ def build_current_influxdb_data(data: dict):
         }
         influx_data.append(measurement)
 
+    logger.info("Made it here")
     return influx_data
 
 
@@ -89,8 +90,8 @@ def write_influx_data(influx_data, influx_client):
     Write influx_data to database
     """
     # logger = logging.getLogger(__name__)
-    # logger.info("Writing data to influxdb...")
-    # logger.info("Number of data points: ".format(len(influx_data)))
+    logger.info("Writing data to influxdb...")
+    logger.debug("Number of data points: {}".format(len(influx_data)))
     print(
         influx_client.write_points(
             influx_data, time_precision="s", batch_size=DEFAULT_BATCH_SIZE
@@ -169,17 +170,18 @@ def current(random_sleep, dry_run):
     if bool(random_sleep) and dry_run is False:
         time.sleep(random.randrange(0, random_sleep))
     session = requests.Session()
+    logger.debug("Here we go, fetching data")
     data = fetch_current_data(session)
     if dry_run is True:
-        print("Raw data:")
-        print(json.dumps(data, indent=2))
-        print("=-=-=-=-=-=-=-=-")
+        logger.debug("Raw data:")
+        logger.debug(json.dumps(data, indent=2))
+        logger.debug("=-=-=-=-=-=-=-=-")
 
     influxdb_data = build_current_influxdb_data(data)
     if dry_run is True:
-        print("InfluxDB data:")
-        print(json.dumps(influxdb_data, indent=2))
-        print("=-=-=-=-=-=-=-=-")
+        logger.debug("InfluxDB data:")
+        logger.debug(json.dumps(influxdb_data, indent=2))
+        logger.debug("=-=-=-=-=-=-=-=-")
         return
 
     influx_clientdb = build_influxdb_client()
