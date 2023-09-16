@@ -24,7 +24,7 @@ STATION = "Allens Sideroad"
 MEASUREMENTS = {"pm10": "pm10", "pm25": "pm25", "temp": "t", "humidity": "h"}
 
 
-# DEFAULT_BATCH_SIZE = 10_000
+DEFAULT_BATCH_SIZE = 10_000
 
 
 @click.group("aqicn")
