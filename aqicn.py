@@ -12,8 +12,17 @@ from influxdb import InfluxDBClient
 
 # Sault Ste Marie
 # "location": "Allens Sideroad, Sault Ste. Marie, Algoma, Ontario, P6C 5P7, Canada"
+#
+# At some point, may want to switch to using nominatim:
+# curl 'https://nominatim.openstreetmap.org/reverse?lat=46.59215&lon=-84.402466&format=json' | jq .
+#
+# Also: think about a class for this
+SSM_URL = "https://api.waqi.info/feed/A202660"
+LOCATION = "Sault Ste Marie"
+STATION = "Allens Sideroad"
+# my name, api name
+MEASUREMENTS = {"pm10": "pm10", "pm25": "pm25", "temp": "t", "humidity": "h"}
 
-ssm_url = "https://api.waqi.info/feed/A202660"
 
 # DEFAULT_BATCH_SIZE = 10_000
 
@@ -25,20 +34,25 @@ def aqicn():
     """
 
 
-def build_historical_influxdb_data(data: dict):
+def build_current_influxdb_data(data: dict):
     """
-    build historical influx data
+    Build current conditions influx data
     """
     influx_data = []
-    location = data["Location"]["City"]
-    for period in data["Location"]["periods"]:
+    station = STATION
+    for my_name, their_name in MEASUREMENTS:
+        val = data["data"]["iaqi"][their_name]["v"]
+        # They appear to record time in epoch seconds.  That works for
+        # me; the call in write_influx_data specifies "seconds" as the
+        # precision.
+        tstamp = data["data"]["time"]["v"]
         measurement = {
-            "measurement": "aqicn_index_historical",
-            "fields": {"aqicn_index": period["Index"]},
-            "tags": {"station_location": location},
-            "time": period["Period"],
+            "measurement": "aqicn",
+            "fields": {my_name: val},
+            "tags": {"location": LOCATION, "station": STATION},
+            "time": tstamp,
         }
-        influx_data.append(measurement)
+    influx_data.append(measurement)
 
     return influx_data
 
@@ -114,7 +128,7 @@ def build_influxdb_client():
     return influx_client
 
 
-def fetch_forecast_data(session, url=ssm_url):
+def fetch_forecast_data(session, url=SSM_URL):
     """
     Fetch forecast data
     """
@@ -125,9 +139,9 @@ def fetch_forecast_data(session, url=ssm_url):
     return data
 
 
-def fetch_historical_data(session, url=ssm_url):
+def fetch_current_data(session, url=SSM_URL):
     """
-    Do historical stuff
+    Fetch current data
     """
     # TODO: Dedupe this code
     url = f"{url}/?token={os.getenv('AQICN_TOKEN')}"
@@ -136,7 +150,7 @@ def fetch_historical_data(session, url=ssm_url):
     return data
 
 
-@click.command("historical", short_help="Fetch historical data")
+@click.command("current", short_help="Fetch current data")
 @click.option(
     "--random-sleep",
     default=300,
@@ -147,19 +161,26 @@ def fetch_historical_data(session, url=ssm_url):
     default=False,
     help="Don't push to Influxdb, just dump data",
 )
-def historical(random_sleep, dry_run):
+def current(random_sleep, dry_run):
     """
-    Historical data
+    Fetch current data
     """
     if bool(random_sleep) and dry_run is False:
         time.sleep(random.randrange(0, random_sleep))
     session = requests.Session()
-    data = fetch_historical_data(session)
+    data = fetch_current_data(session)
     if dry_run is True:
+        print("Raw data:")
         print(json.dumps(data, indent=2))
+        print("=-=-=-=-=-=-=-=-")
+
+    influxdb_data = build_current_influxdb_data(data)
+    if dry_run is True:
+        print("InfluxDB data:")
+        print(json.dumps(influxdb_data, indent=2))
+        print("=-=-=-=-=-=-=-=-")
         return
 
-    influxdb_data = build_historical_influxdb_data(data)
     influx_clientdb = build_influxdb_client()
     write_influx_data(influxdb_data, influx_clientdb)
 
@@ -184,16 +205,22 @@ def forecast(random_sleep, dry_run):
     session = requests.Session()
     data = fetch_forecast_data(session)
     if dry_run is True:
+        print("Raw data:")
         print(json.dumps(data, indent=2))
-        return
+        print("=-=-=-=-=-=-=-=-")
 
     influxdb_data = build_forecast_influxdb_data(data)
+    if dry_run is True:
+        print("InfluxDB data:")
+        print(json.dumps(influxdb_data, indent=2))
+        print("=-=-=-=-=-=-=-=-")
+        return
     influxdb_client = build_influxdb_client()
     write_influx_data(influxdb_data, influxdb_client)
 
 
 aqicn.add_command(forecast)
-aqicn.add_command(historical)
+aqicn.add_command(current)
 
 if __name__ == "__main__":
     aqicn()
