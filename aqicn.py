@@ -40,8 +40,9 @@ def build_current_influxdb_data(data: dict):
     """
     influx_data = []
     station = STATION
-    for my_name, their_name in MEASUREMENTS:
-        val = data["data"]["iaqi"][their_name]["v"]
+    for my_name, their_name in MEASUREMENTS.items():
+        # Coerce to a float in case it comes back as an int
+        val = float(data["data"]["iaqi"][their_name]["v"])
         # They appear to record time in epoch seconds.  That works for
         # me; the call in write_influx_data specifies "seconds" as the
         # precision.
