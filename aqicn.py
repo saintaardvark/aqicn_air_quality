@@ -53,7 +53,7 @@ def build_current_influxdb_data(data: dict):
             "tags": {"location": LOCATION, "station": STATION},
             "time": tstamp,
         }
-    influx_data.append(measurement)
+        influx_data.append(measurement)
 
     return influx_data
 
