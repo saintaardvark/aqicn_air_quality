@@ -4,6 +4,7 @@ import json
 import os
 import random
 import requests
+import sys
 import time
 
 import click
@@ -73,7 +74,6 @@ def build_forecast_influxdb_data(data: dict):
         if period["Type"] != "Today":
             continue
 
-        print(period)
         measurement = {
             "measurement": "aqicn_index",
             "fields": {"aqicn_index": period["Index"]},
@@ -92,7 +92,7 @@ def write_influx_data(influx_data, influx_client):
     # logger = logging.getLogger(__name__)
     logger.info("Writing data to influxdb...")
     logger.debug("Number of data points: {}".format(len(influx_data)))
-    print(
+    logger.info(
         influx_client.write_points(
             influx_data, time_precision="s", batch_size=DEFAULT_BATCH_SIZE
         )
@@ -125,8 +125,7 @@ def build_influxdb_client():
         ssl=True,
         verify_ssl=True,
     )
-    # logger.info("Connected to InfluxDB version {}".format(influx_client.ping()))
-    print("Connected to InfluxDB version {}".format(influx_client.ping()))
+    logger.debug("Connected to InfluxDB version {}".format(influx_client.ping()))
     return influx_client
 
 
@@ -136,7 +135,7 @@ def fetch_forecast_data(session, url=SSM_URL):
     """
     # TODO: Dedupe this code
     url = f"{url}/?token={os.getenv('AQICN_TOKEN')}"
-    print(url)
+    logger.debug(url)
     data = session.get(url).json()
     return data
 
@@ -147,7 +146,7 @@ def fetch_current_data(session, url=SSM_URL):
     """
     # TODO: Dedupe this code
     url = f"{url}/?token={os.getenv('AQICN_TOKEN')}"
-    print(url)
+    logger.debug(url)
     data = session.get(url).json()
     return data
 
@@ -163,10 +162,19 @@ def fetch_current_data(session, url=SSM_URL):
     default=False,
     help="Don't push to Influxdb, just dump data",
 )
-def current(random_sleep, dry_run):
+@click.option(
+    "--debug/--no-debug",
+    default=False,
+    help="Print debugging information",
+)
+def current(random_sleep, dry_run, debug):
     """
     Fetch current data
     """
+    if debug is False:
+        handler = {"sink": sys.stdout, "level": "ERROR"}
+        logger.configure(handlers=[handler])
+
     if bool(random_sleep) and dry_run is False:
         time.sleep(random.randrange(0, random_sleep))
     session = requests.Session()
@@ -199,10 +207,17 @@ def current(random_sleep, dry_run):
     default=False,
     help="Don't push to Influxdb, just dump data",
 )
-def forecast(random_sleep, dry_run):
+@click.option(
+    "--debug/--no-debug",
+    default=False,
+    help="Print debugging information",
+)
+def forecast(random_sleep, dry_run, debug):
     """
     Forecast data
     """
+    handler = {"sink": sys.stdout, "level": "ERROR"}
+    logger.configure(handlers=[handler])
     if bool(random_sleep) and dry_run is False:
         time.sleep(random.randrange(0, random_sleep))
     session = requests.Session()
